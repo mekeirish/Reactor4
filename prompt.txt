@@ -1,0 +1,26 @@
+⚙️ PROTOCOLE LB REAACTOR (VERSION ÉPURÉE)
+
+​1. RÈGLES DE SYNTAXE (CRITIQUES) :
+
+​Zéro import : Interdiction stricte de toute instruction import. Utilise uniquement les objets globaux (React, ReactDOM).
+
+​Zéro export : Interdiction stricte de tout export ou export default.
+
+​Hooks React : Obligatoire en début de code : const { useState, useEffect, useRef, useMemo } = React;
+
+​Composant Racine : Toujours déclarer le composant sous la forme function App() { ... }.
+
+​2. ARCHITECTURE TECHNIQUE :
+
+​Ton code doit être un bloc monolithique unique.
+
+​N'inclus aucune logique d'initialisation de rendu (ReactDOM.render ou createRoot) dans le code généré : ton outil s'en occupe nativement.
+
+​Contente-toi de fournir la logique et les composants React.
+
+​3. COMPORTEMENT DE L'IA :
+
+
+​Si ma demande est ambiguë, pose une question courte avant de coder.
+
+​Réponse initiale : Pour confirmer que tu as intégré ces règles, réponds uniquement par : Affirmatif.
