@@ -261,8 +261,18 @@
         <button id="pasteCodeBtn" class="square-btn" title="Coller depuis le presse-papiers">
             <svg viewBox="0 0 24 24"><rect x="9" y="3" width="10" height="18" rx="2" ry="2"></rect><path d="M9 7h10M9 11h10M9 15h6M5 3h4v18H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"></path></svg>
         </button>
+        <!-- BOUTON PROMPT -->
+        <button id="promptBtn" class="square-btn" title="Copier le prompt">
+            <svg viewBox="0 0 24 24" width="22" height="22">
+                <polygon points="12 2 15 9 22 9 16 14 18 21 12 17 6 21 8 14 2 9 9 9 12 2" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+        <!-- BOUTON TOGGLE SIGNATURE AVEC LED -->
+        <button id="toggleSigBtn" class="square-btn" title="Toggle Signature">
+            <div id="led" class="dot green" style="width:14px; height:14px;"></div>
+        </button>
         <button id="runPreviewBtn" class="square-btn btn-test-green" title="Tester l'aperçu">
-            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor" stroke="none"></polygon></svg>
+            <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21" fill="currentColor" stroke="none"></polygon></svg>
         </button>
         <button id="exportHtmlBtn" class="square-btn" title="Exporter le fichier HTML complet">
             <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -358,8 +368,62 @@
         modalSaveBtn: document.getElementById('modalSaveBtn'),
         modalCancelBtn: document.getElementById('modalCancelBtn'),
         iconInput: document.getElementById('iconInput'),
-        previewIcon: document.getElementById('previewIcon')
+        previewIcon: document.getElementById('previewIcon'),
+        toggleSigBtn: document.getElementById('toggleSigBtn'),
+        led: document.getElementById('led'),
+        promptBtn: document.getElementById('promptBtn')
     };
+
+    // --- BOUTON PROMPT : Copie du contenu de prompt.txt ---
+    async function copyPromptToClipboard() {
+        try {
+            showMessage("⏳ Chargement du prompt...");
+            const response = await fetch('prompt.txt');
+            if (!response.ok) {
+                throw new Error(`Fichier non trouvé (${response.status})`);
+            }
+            const text = await response.text();
+            
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(text);
+                showMessage("✅ Prompt copié dans le presse-papiers !");
+            } else {
+                // Fallback pour navigateurs sans clipboard API
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                showMessage("✅ Prompt copié dans le presse-papiers !");
+            }
+        } catch (err) {
+            if (err.message.includes('404') || err.message.includes('not found')) {
+                showError("❌ Fichier prompt.txt introuvable dans le dépôt.");
+            } else {
+                showError(`❌ Erreur : ${err.message}`);
+            }
+        }
+    }
+
+    if (domElements.promptBtn) {
+        domElements.promptBtn.addEventListener('click', copyPromptToClipboard);
+    }
+
+    // --- LOGIQUE SIGNATURE AVEC LED ---
+    let isSignatureEnabled = true;
+
+    if (domElements.toggleSigBtn && domElements.led) {
+        domElements.toggleSigBtn.addEventListener('click', () => {
+            isSignatureEnabled = !isSignatureEnabled;
+            // Changer la couleur de la LED
+            domElements.led.style.backgroundColor = isSignatureEnabled ? '#10b981' : '#ef4444';
+            // Rafraîchir l'aperçu
+            runInPreview();
+        });
+    }
 
     function updateThemeBtn() {
         if (domElements.toggleDark) {
@@ -545,7 +609,7 @@
         });
     }
 
-    function generateIndexHtml(rawCode) {
+    function generateIndexHtml(rawCode, showSignature = true) {
         let compiledCode = "";
         try {
             const result = Babel.transform(rawCode, { 
@@ -562,6 +626,12 @@
 
         const safeCompiled = compiledCode.replace(/<\/script>/gi, '<\\/script>');
         
+        // SIGNATURE EN POSITION ABSOLUTE (zoom compatible)
+        const signatureHtml = showSignature ? `
+        <footer style="position:absolute; bottom:10px; left:0; width:100%; display:flex; justify-content:center; pointer-events:none; z-index:9999;">
+            <img src="https://i.ibb.co/HfZCBFqK/slb.png" alt="slb" style="width:64px; opacity:0.8;">
+        </footer>` : '';
+
         const errorScript = `
             window.addEventListener('error', function(e) {
                 const root = document.getElementById('root');
@@ -580,12 +650,13 @@
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"><\/script>
     <style>
-        body { margin: 0; padding: 0; background-color: #030712; font-family: system-ui; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        body { margin: 0; padding: 0; background-color: #030712; font-family: system-ui; min-height: 100vh; position: relative; }
         #root { width: 100%; min-height: 100vh; display: flex; justify-content: center; align-items: center; }
     </style>
 </head>
 <body>
     <div id="root"></div>
+    ${signatureHtml}
     <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"><\/script>
     <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"><\/script>
     <script>${errorScript}<\/script>
@@ -653,7 +724,7 @@
         }
         try {
             await ensureBabel();
-            const html = generateIndexHtml(rawCode);
+            const html = generateIndexHtml(rawCode, isSignatureEnabled);
             const blob = new Blob([html], { type: 'text/html' });
             const blobUrl = URL.createObjectURL(blob);
             if (currentPreviewBlobUrl) URL.revokeObjectURL(currentPreviewBlobUrl);
@@ -681,7 +752,7 @@
         const rawCode = domElements.reactCode ? domElements.reactCode.value.trim() : "";
         if (!rawCode) return showError("Code vide.");
         try {
-            const html = generateIndexHtml(rawCode);
+            const html = generateIndexHtml(rawCode, isSignatureEnabled);
             const blob = new Blob([html], { type: 'text/html' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -893,7 +964,7 @@
                         throw e;
                     }
                 }
-                const finalIndex = generateIndexHtml(code);
+                const finalIndex = generateIndexHtml(code, isSignatureEnabled);
                 const finalManifest = domElements.manifestPreview ? domElements.manifestPreview.value : "";
                 const finalSw = domElements.swPreview ? domElements.swPreview.value : "";
                 updateChecklist('uploadIndex','pending');
@@ -918,21 +989,19 @@
                 deploySuccess = true;
             } catch (err) {
                 showError(`Erreur : ${err.message}`);
-                // Trouver la dernière étape encore en pending pour la marquer en erreur
                 const pendingItems = document.querySelectorAll('.checklist-item.pending');
                 if (pendingItems.length > 0) {
                     const lastPending = pendingItems[pendingItems.length - 1];
                     const step = lastPending.id.replace('check-','');
                     updateChecklist(step, 'error', err.message);
                 } else {
-                    // Si aucune étape en pending, on affiche dans le statut
                     showError(err.message);
                 }
                 domElements.deployBtn.disabled = false;
                 return;
             }
 
-            // --- BOUTON "VOIR LE SITE" même si pas encore prêt ---
+            // --- BOUTON "VOIR LE SITE" ---
             const linkContainer = domElements.finalLinkContainer;
             if (siteUrl) {
                 const btn = document.createElement('button');
@@ -942,7 +1011,6 @@
                 btn.onclick = () => window.open(siteUrl, '_blank');
                 linkContainer.innerHTML = '';
                 linkContainer.appendChild(btn);
-                // Ajouter un message d'attente si wait n'a pas encore été exécuté ou échoué
                 const waitMsg = document.createElement('div');
                 waitMsg.id = 'waitMessage';
                 waitMsg.style.fontSize = '0.85rem';
@@ -952,7 +1020,6 @@
                 linkContainer.appendChild(waitMsg);
             }
 
-            // Attendre que le site soit prêt
             updateChecklist('wait','pending');
             showMessage("⏳ Attente déploiement...");
             const ready = await waitForSiteReady(siteUrl, 40, 2500);
